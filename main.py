@@ -17,6 +17,15 @@ import gc
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer, PorterStemmer
+from nltk.tokenize import word_tokenize
+
+nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('stopwords')
+
 # 画像のデータ拡張を行う関数を定義
 
 def set_seed(seed):
@@ -53,6 +62,21 @@ def process_text(text):
     text = re.sub(r"[^\w\s':]", ' ', text)
     text = re.sub(r'\s+,', ',', text)
     text = re.sub(r'\s+', ' ', text).strip()
+        # ストップワードの削除
+    stop_words = set(stopwords.words('english'))
+    words = word_tokenize(text)
+    filtered_words = [word for word in words if word.lower() not in stop_words]
+
+    # 単語のレンマ化 (Lemmatization)
+    lemmatizer = WordNetLemmatizer()
+    lemmatized_words = [lemmatizer.lemmatize(word) for word in filtered_words]
+
+    # 単語のステミング (Stemming)
+    stemmer = PorterStemmer()
+    stemmed_words = [stemmer.stem(word) for word in lemmatized_words]
+
+    # 最終的なテキストを再構築
+    text = ' '.join(stemmed_words)
 
     return text
 
@@ -95,11 +119,11 @@ class VQADataset(torch.utils.data.Dataset):
         #7.16一旦消すimage_path = f"{self.image_dir}/{self.df['image'][idx]}"
         #7.16
         image_path = f"/home/whill/desktop/pm/data/train/{self.df['image'][idx]}"
-
+        
         try:
             image = Image.open(image_path)
         except FileNotFoundError:
-            print(f"Image not found: {image_path}. Searching from newdata...")
+            #print(f"Image not found: {image_path}. Searching from newdata...")
             image_path = f"/home/whill/desktop/pm/data/newdata/{self.df['image'][idx]}"
             try:
                 image = Image.open(image_path)
@@ -111,8 +135,8 @@ class VQADataset(torch.utils.data.Dataset):
             # ファイルパスの生成
                 image_path = f"/home/whill/desktop/pm/data/train/{filename}"
             #7.16
-
-
+    
+    
             image = Image.open(image_path)
 
 
@@ -165,7 +189,7 @@ class VQADataset(torch.utils.data.Dataset):
             }
 
             #7.15
-
+            
 
 # 2. 評価指標の実装
 # 簡単にするならBCE（簡単な損失関数）を利用する
@@ -306,8 +330,8 @@ def ResNet50():
 class VQAModel(nn.Module):
     def __init__(self, vocab_size: int, n_answer: int):
         super().__init__()
-        #self.resnet = ResNet18() 2024.7.12
-        self.resnet = ResNet50()
+        #self.resnet = ResNet18() 2024.7.12  
+        self.resnet = ResNet50() 
         self.text_encoder = nn.Linear(vocab_size, 512)
 
         self.fc = nn.Sequential(
@@ -315,7 +339,7 @@ class VQAModel(nn.Module):
             nn.Linear(1024, 1024),
             nn.ReLU(inplace=True),
             #nn.Linear(512, n_answer) 2024.7.12
-            nn.Linear(1024, n_answer)
+            nn.Linear(1024, n_answer) 
         )
 
     def forward(self, image, question):
@@ -381,10 +405,10 @@ def eval(model, dataloader, optimizer, criterion, device):
 
 print("OK")
 
-
-
-
-print("ok")
+            
+            
+            
+print("ok")   
 # メイン関数
 def main():
     set_seed(42)
@@ -430,7 +454,8 @@ def main():
         submission = [train_dataset.idx2answer[id] for id in submission]
         submission = np.array(submission)
         torch.save(model.state_dict(), "model.pth")
-        np.save("submission7.15.npy", submission)
+        np.save("submission7.17.last.npy", submission)
 
 if __name__ == "__main__":
     main()
+
