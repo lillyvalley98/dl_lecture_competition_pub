@@ -17,16 +17,6 @@ import gc
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer, PorterStemmer
-from nltk.tokenize import word_tokenize
-
-nltk.download('punkt')
-nltk.download('wordnet')
-nltk.download('stopwords')
-
-# 画像のデータ拡張を行う関数を定義
 
 def set_seed(seed):
     random.seed(seed)
@@ -62,21 +52,6 @@ def process_text(text):
     text = re.sub(r"[^\w\s':]", ' ', text)
     text = re.sub(r'\s+,', ',', text)
     text = re.sub(r'\s+', ' ', text).strip()
-        # ストップワードの削除
-    stop_words = set(stopwords.words('english'))
-    words = word_tokenize(text)
-    filtered_words = [word for word in words if word.lower() not in stop_words]
-
-    # 単語のレンマ化 (Lemmatization)
-    lemmatizer = WordNetLemmatizer()
-    lemmatized_words = [lemmatizer.lemmatize(word) for word in filtered_words]
-
-    # 単語のステミング (Stemming)
-    stemmer = PorterStemmer()
-    stemmed_words = [stemmer.stem(word) for word in lemmatized_words]
-
-    # 最終的なテキストを再構築
-    text = ' '.join(stemmed_words)
 
     return text
 
@@ -116,25 +91,21 @@ class VQADataset(torch.utils.data.Dataset):
         self.idx2answer = dataset.idx2answer
 
     def __getitem__(self, idx):
-        #7.16一旦消すimage_path = f"{self.image_dir}/{self.df['image'][idx]}"
-        #7.16
         image_path = f"/home/whill/desktop/pm/data/train/{self.df['image'][idx]}"
         
         try:
             image = Image.open(image_path)
         except FileNotFoundError:
-            #print(f"Image not found: {image_path}. Searching from newdata...")
+            print(f"Image not found: {image_path}. Searching from newdata...")
             image_path = f"/home/whill/desktop/pm/data/newdata/{self.df['image'][idx]}"
             try:
                 image = Image.open(image_path)
             except FileNotFoundError:
-            #もとのやつ　image_path = f"/home/whill/desktop/pm/data/train/{self.df['image'][idx]}"
                 if idx>19872:
                     idx=idx-19873#idxが19774~と続いてしまう対策
                 filename = f"train_{idx:05d}.jpg"  # idxを使ってファイル名を構成する
             # ファイルパスの生成
                 image_path = f"/home/whill/desktop/pm/data/train/{filename}"
-            #7.16
     
     
             image = Image.open(image_path)
@@ -161,7 +132,6 @@ class VQADataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.df)
-#7.15 koko generate newdata
     def generate_new_data(self, new_data_folder):
         print("resize start")
         os.makedirs(new_data_folder, exist_ok=True)
@@ -170,7 +140,7 @@ class VQADataset(torch.utils.data.Dataset):
             image = Image.open(image_path)
             target_size = (1200, 1200)#1200にするtarget_size = (1200, 1200)
             random_scale = random.uniform(0.8, 0.9)
-            image = image.resize(target_size, Image.LANCZOS)#実際にサイズ変更
+            image = image.resize(target_size, Image.LANCZOS)#サイズ変更
             new_size = (int(image.size[0] * random_scale), int(image.size[1] * random_scale))
             i, j, h, w = transforms.RandomCrop.get_params(image, output_size=new_size)
             cropped_image = F.crop(image, i, j, h, w)
@@ -188,11 +158,9 @@ class VQADataset(torch.utils.data.Dataset):
                 "answers": self.df["answers"][idx]
             }
 
-            #7.15
             
 
 # 2. 評価指標の実装
-# 簡単にするならBCE（簡単な損失関数）を利用する
 def VQA_criterion(batch_pred: torch.Tensor, batch_answers: torch.Tensor):
     total_acc = 0.
 
@@ -211,7 +179,7 @@ def VQA_criterion(batch_pred: torch.Tensor, batch_answers: torch.Tensor):
     return total_acc / len(batch_pred)
 
 
-# 3. モデルのの実装
+# 3. モデルの実装
 # ResNetを利用できるようにしておく
 class BasicBlock(nn.Module):
     expansion = 1
@@ -330,15 +298,12 @@ def ResNet50():
 class VQAModel(nn.Module):
     def __init__(self, vocab_size: int, n_answer: int):
         super().__init__()
-        #self.resnet = ResNet18() 2024.7.12  
         self.resnet = ResNet50() 
         self.text_encoder = nn.Linear(vocab_size, 512)
 
         self.fc = nn.Sequential(
-            #nn.Linear(1024, 512), 2024.7.12
             nn.Linear(1024, 1024),
             nn.ReLU(inplace=True),
-            #nn.Linear(512, n_answer) 2024.7.12
             nn.Linear(1024, n_answer) 
         )
 
@@ -376,8 +341,8 @@ def train(model, dataloader, optimizer, criterion, device):
         total_acc += VQA_criterion(pred.argmax(1), answers)  # VQA accuracy
         simple_acc += (pred.argmax(1) == mode_answer).float().mean().item()  # simple accuracy
 
-    gc.collect()#2024.7.12
-    torch.cuda.empty_cache()#2024.7.12
+    gc.collect()
+    torch.cuda.empty_cache()
     return total_loss / len(dataloader), total_acc / len(dataloader), simple_acc / len(dataloader), time.time() - start
 
 
@@ -399,8 +364,8 @@ def eval(model, dataloader, optimizer, criterion, device):
         total_loss += loss.item()
         total_acc += VQA_criterion(pred.argmax(1), answers)  # VQA accuracy
         simple_acc += (pred.argmax(1) == mode_answer).mean().item()  # simple accuracy
-    gc.collect()#2024.7.12
-    torch.cuda.empty_cache()#2024.7.12
+    gc.collect()
+    torch.cuda.empty_cache()
     return total_loss / len(dataloader), total_acc / len(dataloader), simple_acc / len(dataloader), time.time() - start
 
 print("OK")
@@ -409,7 +374,6 @@ print("OK")
             
             
 print("ok")   
-# メイン関数
 def main():
     set_seed(42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -430,7 +394,7 @@ def main():
 
     model = VQAModel(vocab_size=len(train_dataset.question2idx) + 1, n_answer=len(train_dataset.answer2idx)).to(device)
 
-    num_epoch = 40
+    num_epoch = 1
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
 
@@ -454,8 +418,9 @@ def main():
         submission = [train_dataset.idx2answer[id] for id in submission]
         submission = np.array(submission)
         torch.save(model.state_dict(), "model.pth")
-        np.save("submission7.17.last.npy", submission)
+        np.save("submission7.15.npy", submission)
 
 if __name__ == "__main__":
     main()
+
 
